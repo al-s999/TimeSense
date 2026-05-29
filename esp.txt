@@ -1,0 +1,404 @@
+# ======================
+# WIFI AUTOCONNECT
+# ======================
+import network, time, gc
+import urequests, ujson
+from machine import Pin, time_pulse_us, PWM
+import utime
+
+# ======================
+# KONFIGURASI
+# ======================
+SSID = "V2026"
+PASSWORD = "0aa0ce0eb"
+
+BACKEND_URL = "http://192.168.13.116:8000"
+DEVICE_ID = "esp32-1"
+
+# ======================
+# GLOBAL STATE
+# ======================
+last_identity = None
+inside_identity = None
+
+last_access_time = 0
+ACCESS_COOLDOWN = 5
+
+led1 = Pin(12, Pin.OUT)
+led2 = Pin(27, Pin.OUT)
+
+# LED MODE
+led_mode = "NORMAL"
+last_led_toggle = 0
+led_state = False
+
+# ERROR TIMER
+error_start_time = 0
+ERROR_DURATION = 5
+
+# STATE TIMER
+state_timer = 0
+STATE_TIMEOUT = 3
+
+# ======================
+# DOOR STATE
+# ======================
+door_opened = False
+door_state = "IDLE"
+
+last_open_time = 0
+OPEN_COOLDOWN = 5
+
+exit_timer_start = 0
+EXIT_DURATION = 10
+
+# ======================
+# SYSTEM CONTROL
+# ======================
+last_command_time = 0
+COMMAND_COOLDOWN = 2
+
+# 🔥 FIX: backup identity
+last_valid_access = None
+
+# ======================
+# WIFI
+# ======================
+def wifi_reset():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(False)
+    time.sleep(1)
+    gc.collect()
+    wlan.active(True)
+    time.sleep(1)
+    try:
+        wlan.disconnect()
+    except:
+        pass
+    return wlan
+
+def wifi_connect(ssid, password, timeout=15):
+    wlan = wifi_reset()
+
+    if wlan.isconnected():
+        return wlan
+
+    wlan.connect(ssid, password)
+
+    start = time.time()
+    while not wlan.isconnected():
+        if time.time() - start > timeout:
+            return None
+        time.sleep(0.3)
+
+    return wlan
+
+def wifi_ensure(wlan):
+    if wlan is None or not wlan.isconnected():
+        wlan = wifi_connect(SSID, PASSWORD)
+    return wlan
+
+wlan = wifi_connect(SSID, PASSWORD)
+
+# ======================
+# HTTP
+# ======================
+def safe_get(url):
+    try:
+        resp = urequests.get(url)
+        data = resp.json()
+        resp.close()
+        return data
+    except Exception as e:
+        print("GET error:", e)
+        return None
+
+def safe_post(url, payload):
+    try:
+        body = ujson.dumps(payload)
+        resp = urequests.post(url, data=body, headers={"Content-Type": "application/json"})
+        resp.close()
+        return True
+    except Exception as e:
+        print("POST error:", e)
+        return False
+
+# ======================
+# API
+# ======================
+def get_access():
+    return safe_get(BACKEND_URL + "/api/access?device_id=" + DEVICE_ID)
+
+def get_command():
+    return safe_get(BACKEND_URL + "/api/command?device_id=" + DEVICE_ID)
+
+def send_sensor_update(d1, d2):
+    safe_post(BACKEND_URL + "/api/sensor/update", {
+        "device_id": DEVICE_ID,
+        "distance1_cm": d1,
+        "distance2_cm": d2
+    })
+
+def post_event(event, d1=None, d2=None):
+    safe_post(BACKEND_URL + "/api/events/ingest", {
+        "device_id": DEVICE_ID,
+        "raw_event": event,
+        "distance1_cm": d1,
+        "distance2_cm": d2
+    })
+
+# ======================
+# SERVO
+# ======================
+servo = PWM(Pin(15))
+servo.freq(50)
+
+def servo_diam():
+    servo.duty_u16(4915)
+
+def buka_pintu():
+    print("BUKA PINTU")
+    servo.duty_u16(8000)
+    utime.sleep(0.2)
+    servo_diam()
+
+def tutup_pintu():
+    print("TUTUP PINTU")
+    servo.duty_u16(2000)
+    utime.sleep(0.2)
+    servo_diam()
+
+# ======================
+# SENSOR
+# ======================
+trig1 = Pin(18, Pin.OUT)
+echo1 = Pin(4, Pin.IN)
+
+trig2 = Pin(25, Pin.OUT)
+echo2 = Pin(32, Pin.IN)
+
+BATAS_JARAK = 10
+
+def baca_jarak_cm(trig, echo):
+    trig.off()
+    time.sleep_us(2)
+    trig.on()
+    time.sleep_us(10)
+    trig.off()
+
+    try:
+        durasi = time_pulse_us(echo, 1, 30000)
+        return (durasi * 0.0343) / 2
+    except:
+        return -1
+
+# ======================
+# STATE
+# ======================
+state = 0
+
+print("=== SYSTEM START ===")
+
+while True:
+    wlan = wifi_ensure(wlan)
+
+    # ======================
+    # COMMAND (🔥 FIX TOTAL)
+    # ======================
+    if time.time() - last_command_time > COMMAND_COOLDOWN:
+        cmd = get_command()
+
+        if cmd:
+            action = cmd.get("action")
+            identity = cmd.get("identity")
+
+            print("CMD:", action, "| ID:", identity)
+
+            if action == "open_door" and not door_opened:
+
+                # 🔥 jangan hapus identity
+                if identity:
+                    last_identity = identity
+                    last_valid_access = identity
+
+                elif last_identity is None:
+                    last_identity = last_valid_access or "unknown"
+
+                print("USE IDENTITY:", last_identity)
+
+                buka_pintu()
+                door_opened = True
+                door_state = "WAITING_ENTRY"
+
+            elif action == "close_door" and door_opened:
+                print("CMD: TUTUP PINTU")
+                tutup_pintu()
+                door_opened = False
+                door_state = "IDLE"
+
+        last_command_time = time.time()
+
+    # ======================
+    # ACCESS (🔥 FIX TOTAL)
+    # ======================
+    if time.time() - last_access_time > ACCESS_COOLDOWN:
+
+        if not door_opened:
+            access = get_access()
+
+            if access:
+                acc = access.get("access")
+                identity = access.get("identity")
+
+                print("ACCESS RAW:", access)
+
+                if acc == "cooldown":
+                    print("IGNORE COOLDOWN")
+
+                elif acc == "allow" and identity:
+
+                    if time.time() - last_open_time > OPEN_COOLDOWN:
+
+                        last_identity = identity
+                        last_valid_access = identity
+
+                        print("ACCESS OK:", last_identity)
+
+                        buka_pintu()
+
+                        door_opened = True
+                        door_state = "WAITING_ENTRY"
+                        last_open_time = time.time()
+
+                elif acc == "deny":
+                    print("ACCESS DENY")
+
+        last_access_time = time.time()
+
+    # ======================
+    # SENSOR
+    # ======================
+    d1 = baca_jarak_cm(trig1, echo1)
+    time.sleep_ms(40)
+    d2 = baca_jarak_cm(trig2, echo2)
+    time.sleep_ms(40)
+
+    print("S1:", d1, "| S2:", d2, "| state:", state, "| door:", door_state)
+
+    if 0 < d1 < 200 and 0 < d2 < 200:
+        send_sensor_update(d1, d2)
+
+    # ======================
+    # STATE TIMEOUT
+    # ======================
+    if state != 0 and time.time() - state_timer > STATE_TIMEOUT:
+        print("STATE TIMEOUT RESET")
+        state = 0
+
+    # ======================
+    # MASUK
+    # ======================
+    if state == 0:
+        if 0 < d1 < BATAS_JARAK:
+            state = 1
+            state_timer = time.time()
+        elif 0 < d2 < BATAS_JARAK:
+            state = 2
+            state_timer = time.time()
+
+    elif state == 1:
+        if 0 < d2 < BATAS_JARAK:
+
+            if door_state == "WAITING_ENTRY":
+                print("VALID MASUK:", last_identity)
+
+                led1.on()
+                led2.off()
+
+                tutup_pintu()
+
+                inside_identity = last_identity
+                last_identity = None
+
+                door_opened = False
+                door_state = "IDLE"
+
+                if inside_identity:
+                    post_event(inside_identity + "_masuk", d1, d2)
+                else:
+                    post_event("orang_masuk", d1, d2)
+
+            else:
+                print("UNKNOWN MASUK")
+
+                led_mode = "ERROR"
+                last_led_toggle = time.time()
+                error_start_time = time.time()
+
+                post_event("orang_masuk", d1, d2)
+
+            state = 0
+
+    # ======================
+    # KELUAR
+    # ======================
+    elif state == 2:
+        if 0 < d1 < BATAS_JARAK:
+
+            if not door_opened:
+                print("KELUAR → buka pintu")
+
+                led1.off()
+                led2.on()
+
+                buka_pintu()
+                door_opened = True
+                door_state = "WAITING_EXIT"
+                exit_timer_start = time.time()
+
+            if inside_identity:
+                post_event(inside_identity + "_keluar", d1, d2)
+                inside_identity = None
+            else:
+                post_event("orang_keluar", d1, d2)
+
+            state = 0
+
+    # ======================
+    # AUTO CLOSE
+    # ======================
+    if door_state == "WAITING_EXIT":
+        if time.time() - exit_timer_start > EXIT_DURATION:
+            print("AUTO CLOSE EXIT")
+
+            tutup_pintu()
+            door_opened = False
+            door_state = "IDLE"
+
+            led1.off()
+            led2.on()
+
+    # ======================
+    # LED ERROR BLINK
+    # ======================
+    if led_mode == "ERROR":
+        if time.time() - last_led_toggle > 1: tfl, ;  
+            led_state = not led_state
+            last_led_toggle = time.time()
+
+            if led_state:
+                led2.on()
+            else:
+                led2.off()
+
+    # ======================
+    # RESET ERROR
+    # ======================
+    if led_mode == "ERROR":
+        if time.time() - error_start_time > ERROR_DURATION:
+            print("RESET ERROR MODE")
+            led_mode = "NORMAL"
+            led1.off()
+            led2.off()
+
+    time.sleep_ms(50)

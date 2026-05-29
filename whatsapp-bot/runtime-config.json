@@ -1,0 +1,21 @@
+{
+  "port": 3001,
+  "pageNotificationUrl": "",
+  "typingMinMs": 800,
+  "typingMaxMs": 1500,
+  "dedupeTtlSeconds": 600,
+  "redisUrl": "",
+  "connectionType": "qr",
+  "pairingNumber": "",
+  "sessionDir": "wa-session",
+  "allowGroups": false,
+  "disableTerminalQr": false,
+  "botNumber": "6288292081326",
+  "ownerNumber": "6288292081326",
+  "backendUrl": "http://127.0.0.1:8000",
+  "notificationPollMs": 8000,
+  "sendLatestOnStart": true,
+  "updatedAt": "2026-05-05T06:17:22.264Z",
+  "lastNotificationId": 1452,
+  "lastNotificationAt": "2026-05-05T13:17:20.349621"
+}

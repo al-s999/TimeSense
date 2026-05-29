@@ -1,0 +1,87 @@
+================================================================================
+TIME SENSE: Solusi Pintar Keamanan & Manajemen Akses Masa Depan
+================================================================================
+
+PENDAHULUAN
+-----------
+Di era digital, keamanan dan efisiensi adalah prioritas utama. Metode konvensional 
+seperti kunci fisik atau kartu akses manual seringkali merepotkan, mudah hilang, 
+dan sulit dipantau secara real-time. 
+
+"Time Sense" hadir sebagai solusi IoT (Internet of Things) terintegrasi yang 
+menggabungkan teknologi pengenalan wajah (Face Recognition), kontrol jarak jauh, 
+dan pemantauan sensor cerdas dalam satu ekosistem yang modern dan andal.
+
+FITUR UNGGULAN
+--------------
+1. Pengenalan Wajah Instan (Instant Face Access)
+   Buka pintu hanya dalam hitungan milidetik (0.2 detik) menggunakan algoritma 
+   pengenalan wajah tingkat tinggi. Ucapkan selamat tinggal pada kunci yang hilang 
+   atau kartu yang tertinggal.
+
+2. Kontrol Jarak Jauh via WhatsApp
+   Kelola akses pintu Anda langsung dari aplikasi chat harian. Melalui Bot WhatsApp 
+   interaktif, Anda bisa membuka/menutup pintu dan menerima laporan aktivitas 
+   secara instan, di mana pun Anda berada.
+
+3. Dashboard Monitoring Real-time
+   Pantau seluruh aktivitas perangkat melalui dashboard web yang elegan dan responsif. 
+   Data sensor (jarak, pergerakan, dan status sistem) diperbarui secara otomatis 
+   setiap 2 detik untuk memastikan transparansi data yang maksimal.
+
+4. Notifikasi Cerdas & Log Aktivitas
+   Dapatkan notifikasi real-time saat seseorang memasuki atau meninggalkan ruangan. 
+   Sistem secara otomatis mencatat riwayat akses, memudahkan audit keamanan dan 
+   manajemen kehadiran (attendance).
+
+5. Keamanan Deteksi Pergerakan (Motion Detection)
+   Dilengkapi dengan sensor ultrasonik ganda yang mampu mendeteksi arah pergerakan 
+   dan aktivitas mencurigakan, memberikan perlindungan ekstra bagi aset berharga Anda.
+
+MENGAPA KONSUMEN MEMBUTUHKAN TIME SENSE?
+----------------------------------------
+- Efisiensi Maksimal: Mempercepat alur masuk-keluar di perkantoran atau hunian.
+- Ketenangan Pikiran: Mengetahui status keamanan rumah atau kantor kapan saja melalui ponsel.
+- Citra Modern & Profesional: Meningkatkan prestise properti atau bisnis Anda 
+  dengan implementasi teknologi terkini.
+- Kemudahan Instalasi & Penggunaan: Antarmuka yang intuitif (user-friendly) 
+  sehingga dapat langsung digunakan tanpa memerlukan keahlian teknis khusus.
+
+STUDY CASE: CERITA PENGGUNA
+---------------------------
+Bayangkan Maya, seorang ibu pekerja yang sering merasa cemas saat meninggalkan 
+anaknya di rumah. Suatu hari, Maya sedang dalam rapat penting ketika ponselnya 
+bergetar. Sebuah notifikasi WhatsApp muncul dari bot Time Sense: 
+
+"⚠️ Gerakan terdeteksi di depan pintu utama."
+
+Maya dengan tenang membuka dashboard Time Sense di ponselnya. Ia melihat status 
+sensor yang mendeteksi seseorang. Tak lama kemudian, pesan baru masuk: 
+
+"✅ Wajah Dikenali: Arka (Anak) - Status: Masuk"
+
+Maya pun tersenyum. Ia tak perlu lagi khawatir Arka kehilangan kunci fisik atau 
+lupa mengunci pintu setelah pulang sekolah. Semua tercatat, semua terpantau, 
+dan ia bisa kembali fokus pada pekerjaannya dengan perasaan tenang. 
+
+Inilah "Time Sense" — bukan hanya teknologi, tapi ketenangan pikiran yang 
+dihadirkan langsung ke dalam genggaman Anda.
+
+TARGET PENGGUNA
+---------------
+- Perkantoran & Coworking Space (Manajemen akses karyawan)
+- Institusi Pendidikan/Sekolah (Monitoring kehadiran siswa secara otomatis)
+- Hunian Pintar/Smart Home (Keamanan dan kenyamanan akses pribadi)
+- Fasilitas Publik (Area terbatas yang membutuhkan verifikasi akses)
+
+KESIMPULAN
+----------
+"Time Sense" bukan sekadar kunci pintar; ini adalah investasi untuk keamanan 
+dan kenyamanan masa depan. Dengan menggabungkan hardware yang tangguh (ESP32) 
+dan software yang canggih (Next.js & AI), kami menghadirkan solusi yang tidak 
+hanya bekerja, tapi juga memberikan nilai tambah bagi gaya hidup dan bisnis Anda.
+
+--------------------------------------------------------------------------------
+Hubungi kami hari ini untuk demonstrasi dan konsultasi gratis!
+"Time Sense: Control Your Space, Master Your Time."
+--------------------------------------------------------------------------------
