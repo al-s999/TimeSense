@@ -265,8 +265,8 @@ async def _live_preview_generator(
     thr_strict: float,
     thr_loose: float,
 ):
-    interval = 1.0 / max(fps, 1.0)
-    detect_interval = 0.5  # Batas inferensi wajah maksimal setiap 0.5 detik (2 FPS)
+    interval = 1.0 / max(fps, 0.001)
+    detect_interval = 10.0  # Inferensi wajah setiap 10 detik agar tidak berat
     last_detect_time = 0.0
     last_detections = []
 
@@ -277,13 +277,14 @@ async def _live_preview_generator(
         start_time = time.time()
         try:
             # Use raw frame to avoid double encode/decode
-            frame = get_latest_frame(timeout=2.0)
+            frame = await asyncio.to_thread(get_latest_frame, 2.0)
             if frame is not None:
                 current_time = time.time()
                 
                 # Hanya jalankan deteksi wajah jika interval waktu telah terlampaui
                 if current_time - last_detect_time >= detect_interval:
-                    last_detections = detect_faces_only(
+                    last_detections = await asyncio.to_thread(
+                        detect_faces_only,
                         frame,
                         thr_strict=thr_strict,
                         thr_loose=thr_loose,
@@ -291,7 +292,7 @@ async def _live_preview_generator(
                     last_detect_time = current_time
 
                 # Gambar selalu bounding box terakhir (bisa instan karena tanpa AI)
-                annotated_bytes = draw_faces(frame, last_detections)
+                annotated_bytes = await asyncio.to_thread(draw_faces, frame, last_detections)
             else:
                 annotated_bytes = _render_error_frame("No camera frame available")
         except Exception as exc:
@@ -427,7 +428,7 @@ async def reset_face_database():
 
 @router.get("/live-preview")
 async def live_preview(
-    fps: float = Query(15.0, ge=1.0, le=30.0),
+    fps: float = Query(15.0, ge=0.1, le=30.0),
     thr_strict: float = Query(0.35, ge=0.0, le=1.0),
     thr_loose: float = Query(0.50, ge=0.0, le=1.0),
 ):
