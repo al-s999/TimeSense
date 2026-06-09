@@ -66,6 +66,7 @@ export function useProfile() {
   const [profile, setProfile] = useState<ProfileData>(DEFAULT_PROFILE);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfile(getStoredProfile());
     return subscribeProfile(setProfile);
   }, []);

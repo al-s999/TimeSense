@@ -12,7 +12,7 @@ import utime
 SSID = "V2026"
 PASSWORD = "0aa0ce0eb"
 
-BACKEND_URL = "http://192.168.13.116:8000"
+BACKEND_URL = "http://192.168.164.116:8000"
 DEVICE_ID = "esp32-1"
 
 # ======================
@@ -382,7 +382,7 @@ while True:
     # LED ERROR BLINK
     # ======================
     if led_mode == "ERROR":
-        if time.time() - last_led_toggle > 1: tfl, ;  
+        if time.time() - last_led_toggle > 1:
             led_state = not led_state
             last_led_toggle = time.time()
 
@@ -402,3 +402,4 @@ while True:
             led2.off()
 
     time.sleep_ms(50)
+

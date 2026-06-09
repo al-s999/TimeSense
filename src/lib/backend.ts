@@ -5,6 +5,7 @@ export type BackendEvent = {
   predicted_label: string | null;
   confidence: number | null;
   server_received_at: string;
+  image_url?: string | null;
 };
 
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -48,5 +49,15 @@ export async function getHistory(params?: {
     throw new Error(`Failed to fetch history: ${res.status} ${text}`);
   }
 
+  return res.json();
+}
+
+export async function getHistoryById(id: number): Promise<BackendEvent> {
+  const base = requireBaseUrl();
+  const res = await fetch(`${base}/api/history/${id}`, { cache: "no-store" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch history by ID: ${res.status} ${text}`);
+  }
   return res.json();
 }

@@ -1,5 +1,6 @@
 import { getHistory, type BackendEvent } from "@/lib/backend";
 import RevealOnScroll from "@/components/RevealOnScroll";
+import Link from "next/link";
 
 function formatDayDate(iso: string) {
   const d = new Date(iso);
@@ -54,9 +55,9 @@ export default async function ActivityPreview() {
         <div className="font-semibold flex items-center gap-2">
           <span aria-hidden>▤</span> Riwayat aktivitas
         </div>
-        <a className="text-sm text-neutral-500 hover:text-neutral-800" href="/history">
+        <Link className="text-sm text-neutral-500 hover:text-neutral-800" href="/history">
           See all
-        </a>
+        </Link>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200/70">

@@ -20,8 +20,6 @@ const CONTROLS: Array<{
   label: string;
   tone: "green" | "red" | "blue";
 }> = [
-  { action: "enable", label: "Aktifkan Sistem", tone: "green" },
-  { action: "disable", label: "Matikan Sistem", tone: "red" },
   { action: "open_door", label: "Buka Pintu", tone: "blue" },
   { action: "close_door", label: "Tutup Pintu", tone: "blue" },
 ];

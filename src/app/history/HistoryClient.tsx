@@ -2,6 +2,7 @@
 
 import type { BackendEvent } from "@/lib/backend";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 
 type Item = {
   id: number;
@@ -10,6 +11,7 @@ type Item = {
   time: string;
   device: string;
   label: string | null;
+  image_url?: string | null;
 };
 
 const semanticEventKeys = new Set([
@@ -84,6 +86,7 @@ export default function HistoryClient({ events }: { events: BackendEvent[] }) {
       time: formatTime(e.server_received_at),
       device: e.device_id,
       label: e.predicted_label,
+      image_url: e.image_url,
     }));
 
     if (filter === "ALL") return mapped;
@@ -119,19 +122,28 @@ export default function HistoryClient({ events }: { events: BackendEvent[] }) {
           const accent = n.type === "Warning" ? "bg-amber-200/70" : n.type === "Success" ? "bg-emerald-200/70" : n.type === "Danger" ? "bg-rose-200/70" : "bg-sky-200/70";
           const icon = n.type === "Warning" ? "⚠️" : n.type === "Success" ? "✅" : n.type === "Danger" ? "🚪" : "ⓘ";
 
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+
           return (
-            <div key={n.id} className={`rounded-2xl p-5 flex items-center justify-between gap-4 ${accent}`}>
+            <Link key={n.id} href={`/history/${n.id}`} className={`block rounded-2xl p-5 transition hover:brightness-95 flex items-center justify-between gap-4 ${accent}`}>
               <div className="flex items-center gap-4">
-                <div className="w-11 h-11 rounded-2xl bg-white/70 flex items-center justify-center">{icon}</div>
+                {n.image_url ? (
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-white/70 shadow-sm shrink-0 border border-black/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={backendUrl + n.image_url} alt="Face thumbnail" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-11 h-11 rounded-2xl bg-white/70 flex items-center justify-center text-lg shrink-0 shadow-sm border border-black/5">{icon}</div>
+                )}
                 <div>
-                  <div className="font-semibold">{n.message}</div>
-                  <div className="text-sm text-neutral-600">
+                  <div className="font-semibold text-neutral-800">{n.message}</div>
+                  <div className="text-sm text-neutral-600 mt-0.5">
                     {n.time} • {n.device}
                   </div>
                 </div>
               </div>
-              <div className="text-neutral-700">›</div>
-            </div>
+              <div className="text-neutral-500 font-medium">Lihat Detail ›</div>
+            </Link>
           );
         })}
       </div>

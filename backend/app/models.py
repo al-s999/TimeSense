@@ -13,3 +13,4 @@ class Event(Base):
 
     server_received_at = Column(DateTime, index=True, nullable=False)
     payload_json = Column(Text, nullable=True)  # simpan payload asli (string JSON)
+    image_url = Column(String, nullable=True)  # path gambar history

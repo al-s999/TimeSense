@@ -193,9 +193,11 @@ def capture_and_recognize(
     from .face_router import recognize_from_bytes
 
     image_bytes = capture_jpeg_bytes()
-    return recognize_from_bytes(
+    result = recognize_from_bytes(
         image_bytes=image_bytes,
         me_identity=me_identity,
         thr_strict=thr_strict,
         thr_loose=thr_loose,
     )
+    result["image_bytes"] = image_bytes
+    return result

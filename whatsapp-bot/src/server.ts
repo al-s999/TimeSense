@@ -594,12 +594,12 @@ function mapNotificationMessage(label: string | null, raw: string): string {
     case "SOMEONE_KELUAR": return "Orang tidak dikenal keluar";
     default:
       if (key.endsWith("_MASUK")) {
-        let name = key.replace("_MASUK", "");
+        const name = key.replace("_MASUK", "");
         if (name === "SOMEONE") return "Orang tidak dikenal masuk";
         return `${name} masuk`;
       }
       if (key.endsWith("_KELUAR")) {
-        let name = key.replace("_KELUAR", "");
+        const name = key.replace("_KELUAR", "");
         if (name === "SOMEONE") return "Orang tidak dikenal keluar";
         return `${name} keluar`;
       }

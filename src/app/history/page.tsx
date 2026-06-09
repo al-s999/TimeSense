@@ -37,16 +37,28 @@ function infoFromLabel(label: string | null, raw: string) {
   return { text: "—", kind: "UNKNOWN" as const };
 }
 
-export default async function HistoryPage() {
-  let rows: BackendEvent[] = [];
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
+  let allRows: BackendEvent[] = [];
   let errorMessage: string | null = null;
 
   try {
-    rows = await getHistory({ limit: 20 });
+    allRows = await getHistory({ limit: 10000 });
   } catch (err) {
     console.warn("HistoryPage: gagal memuat history", err);
     errorMessage = "Gagal memuat riwayat. Pastikan backend berjalan dan URL sudah benar.";
   }
+
+  const currentPage = parseInt(searchParams?.page || "1", 10);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(allRows.length / itemsPerPage) || 1;
+  const page = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startIndex = (page - 1) * itemsPerPage;
+  const rows = allRows.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <div className="p-6">
@@ -78,24 +90,27 @@ export default async function HistoryPage() {
 
               const badge =
                 info.kind === "IN"
-                  ? "bg-sky-500 text-white"
+                  ? "bg-emerald-500 text-white"
                   : info.kind === "OUT"
-                  ? "bg-red-600 text-white"
+                  ? "bg-rose-500 text-white"
                   : "bg-neutral-400 text-white";
 
               return (
                 <div
                   key={e.id}
-                  className="grid grid-cols-[120px_1.6fr_140px_180px_80px] items-center px-6 py-4 text-sm"
+                  className="grid grid-cols-[120px_1.6fr_140px_180px_80px] items-center px-6 py-4 text-sm hover:bg-white/50 transition-colors"
                 >
-                  <div className="text-neutral-500">#{e.id}</div>
+                  <div className="text-neutral-500 font-medium">#{e.id}</div>
 
-                  <div className="text-neutral-700">{dayDate}</div>
+                  <div className="text-neutral-700 font-medium">
+                    {dayDate}
+                    <div className="text-xs text-neutral-500 mt-0.5">{e.predicted_label || e.raw_event}</div>
+                  </div>
 
-                  <div className="text-center text-neutral-500">{t}</div>
+                  <div className="text-center text-neutral-500 font-medium">{t}</div>
 
                   <div className="flex justify-center">
-                    <span className={`px-5 py-2 rounded-full text-xs font-semibold ${badge}`}>
+                    <span className={`px-5 py-2 rounded-full text-xs font-bold tracking-wide ${badge}`}>
                       {info.text}
                     </span>
                   </div>
@@ -103,7 +118,7 @@ export default async function HistoryPage() {
                   <div className="flex justify-center">
                     {/* sementara UI only (nanti kalau endpoint delete sudah ada baru dihubungkan) */}
                     <button
-                      className="p-2 rounded-full hover:bg-neutral-200/60"
+                      className="p-2 rounded-full hover:bg-neutral-200/60 transition-colors"
                       title="Delete"
                       aria-label={`Delete event ${e.id}`}
                     >
@@ -116,6 +131,39 @@ export default async function HistoryPage() {
           )}
         </div>
 
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 bg-neutral-50/50 border-t border-neutral-200/70">
+            <div className="text-sm text-neutral-500 font-medium">
+              Menampilkan {startIndex + 1} - {Math.min(startIndex + itemsPerPage, allRows.length)} dari {allRows.length} riwayat
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={page > 1 ? `/history?page=${page - 1}` : "#"}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  page > 1
+                    ? "bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50 shadow-sm"
+                    : "bg-neutral-100/50 text-neutral-400 cursor-not-allowed"
+                }`}
+              >
+                Previous
+              </a>
+              <span className="text-sm font-bold text-neutral-700 px-3">
+                {page} / {totalPages}
+              </span>
+              <a
+                href={page < totalPages ? `/history?page=${page + 1}` : "#"}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                  page < totalPages
+                    ? "bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50 shadow-sm"
+                    : "bg-neutral-100/50 text-neutral-400 cursor-not-allowed"
+                }`}
+              >
+                Next
+              </a>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

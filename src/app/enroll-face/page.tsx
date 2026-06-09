@@ -445,6 +445,7 @@ export default function EnrollFacePage() {
 
               {previewUrl ? (
                 <div className="overflow-hidden rounded-xl border border-[#F6C1C1]/30 bg-white shadow">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewUrl}
                     alt="Preview"

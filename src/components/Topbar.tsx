@@ -17,6 +17,7 @@ export default function Topbar() {
   const [dateStr, setDateStr] = useState("");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDateStr(getCurrentDateIndonesian());
     // Update date at midnight
     const timer = setInterval(() => {

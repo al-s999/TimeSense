@@ -266,17 +266,32 @@ async def _live_preview_generator(
     thr_loose: float,
 ):
     interval = 1.0 / max(fps, 1.0)
+    detect_interval = 0.5  # Batas inferensi wajah maksimal setiap 0.5 detik (2 FPS)
+    last_detect_time = 0.0
+    last_detections = []
+
+    # Import fungsi baru dari face_detection
+    from .face_detection import detect_faces_only, draw_faces
+
     while True:
         start_time = time.time()
         try:
             # Use raw frame to avoid double encode/decode
             frame = get_latest_frame(timeout=2.0)
             if frame is not None:
-                _, annotated_bytes = detect_faces_raw(
-                    frame,
-                    thr_strict=thr_strict,
-                    thr_loose=thr_loose,
-                )
+                current_time = time.time()
+                
+                # Hanya jalankan deteksi wajah jika interval waktu telah terlampaui
+                if current_time - last_detect_time >= detect_interval:
+                    last_detections = detect_faces_only(
+                        frame,
+                        thr_strict=thr_strict,
+                        thr_loose=thr_loose,
+                    )
+                    last_detect_time = current_time
+
+                # Gambar selalu bounding box terakhir (bisa instan karena tanpa AI)
+                annotated_bytes = draw_faces(frame, last_detections)
             else:
                 annotated_bytes = _render_error_frame("No camera frame available")
         except Exception as exc:

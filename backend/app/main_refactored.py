@@ -11,7 +11,12 @@ from typing import Optional, Any, Set
 from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+
+# Setup upload directory
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "history")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 from .db import Base, engine, get_db
 from .models import Event
@@ -86,6 +91,7 @@ def _record_event(
     predicted_label: Optional[str] = None,
     confidence: Optional[float] = None,
     payload: Optional[dict] = None,
+    image_url: Optional[str] = None,
 ) -> Optional[Event]:
     try:
         now = datetime.now(ZoneInfo(TZ_NAME))
@@ -96,6 +102,7 @@ def _record_event(
             confidence=confidence,
             server_received_at=now,
             payload_json=json.dumps(payload, ensure_ascii=False) if payload else None,
+            image_url=image_url,
         )
         db.add(ev)
         db.commit()
@@ -109,6 +116,7 @@ def _record_event(
                 "predicted_label": ev.predicted_label,
                 "confidence": ev.confidence,
                 "server_received_at": ev.server_received_at.isoformat(),
+                "image_url": ev.image_url,
             },
         )
         return ev
@@ -199,6 +207,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
 
 # ===================================================================
@@ -438,6 +447,7 @@ def get_notifications(limit: int = 50, db: Session = Depends(get_db)):
             id=r.id, device_id=r.device_id, raw_event=r.raw_event,
             predicted_label=r.predicted_label, confidence=r.confidence,
             server_received_at=r.server_received_at.isoformat(),
+            image_url=r.image_url,
         )
         for r in rows
     ]
@@ -456,9 +466,23 @@ def get_history(limit: int = 200, device_id: Optional[str] = None, type: Optiona
             id=r.id, device_id=r.device_id, raw_event=r.raw_event,
             predicted_label=r.predicted_label, confidence=r.confidence,
             server_received_at=r.server_received_at.isoformat(),
+            image_url=r.image_url,
         )
         for r in rows
     ]
+
+
+@app.get("/api/history/{id}", response_model=EventOut)
+def get_history_by_id(id: int, db: Session = Depends(get_db)):
+    r = db.query(Event).filter(Event.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return EventOut(
+        id=r.id, device_id=r.device_id, raw_event=r.raw_event,
+        predicted_label=r.predicted_label, confidence=r.confidence,
+        server_received_at=r.server_received_at.isoformat(),
+        image_url=r.image_url,
+    )
 
 
 # ===================================================================
@@ -680,6 +704,17 @@ async def ingest_event(
         predicted_label = _fallback_label(payload.raw_event)
         confidence = 0.0
 
+    image_url = None
+    if face_result and "image_bytes" in face_result:
+        import uuid
+        filename = f"{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(face_result["image_bytes"])
+        image_url = f"/static/history/{filename}"
+        # Hapus bytes dari face_result agar tidak ter-serialize ke JSON
+        del face_result["image_bytes"]
+
     if face_result:
         meta = dict(payload_dict.get("meta") or {})
         meta["face_recognition"] = face_result
@@ -692,6 +727,7 @@ async def ingest_event(
         predicted_label=predicted_label, confidence=confidence,
         server_received_at=now,
         payload_json=json.dumps(payload_dict, ensure_ascii=False),
+        image_url=image_url,
     )
     db.add(ev)
     db.commit()
@@ -702,6 +738,7 @@ async def ingest_event(
             "id": ev.id, "device_id": ev.device_id, "raw_event": ev.raw_event,
             "predicted_label": ev.predicted_label, "confidence": ev.confidence,
             "server_received_at": ev.server_received_at.isoformat(),
+            "image_url": ev.image_url,
         })
     except Exception:
         pass
@@ -710,6 +747,7 @@ async def ingest_event(
         id=ev.id, device_id=ev.device_id, raw_event=ev.raw_event,
         predicted_label=ev.predicted_label, confidence=ev.confidence,
         server_received_at=ev.server_received_at.isoformat(),
+        image_url=ev.image_url,
     )
 
 

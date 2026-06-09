@@ -16,6 +16,7 @@ class EventOut(BaseModel):
     predicted_label: Optional[str] = None
     confidence: Optional[float] = None
     server_received_at: str
+    image_url: Optional[str] = None
 
     class Config:
         from_attributes = True

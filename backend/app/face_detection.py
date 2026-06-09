@@ -89,15 +89,14 @@ def _get_face_app():
     return _face_app
 
 
-def detect_faces_raw(
+def detect_faces_only(
     image_array: Any,
     thr_strict: float = 0.35,
     thr_loose: float = 0.50,
-) -> Tuple[List[FaceDetection], bytes]:
+) -> List[FaceDetection]:
     """
-    Detect faces directly on image array (numpy) to avoid re-decoding.
+    Detect faces directly on image array (numpy) and return detections without drawing.
     """
-    cv2 = _require_cv2()
     np = _require_numpy()
 
     app_face = _get_face_app()
@@ -105,7 +104,6 @@ def detect_faces_raw(
     faces = app_face.get(image_array)
 
     detections: List[FaceDetection] = []
-    annotated = image_array.copy()
     for f in faces:
         bbox = f.bbox.astype(float).tolist()
         det_score = float(getattr(f, "det_score", 0.0))
@@ -136,10 +134,18 @@ def detect_faces_raw(
             )
         )
 
-        x1, y1, x2, y2 = [int(v) for v in bbox]
-        color = (0, 200, 0) if face_is_known else (0, 0, 200)
+    return detections
+
+
+def draw_faces(image_array: Any, detections: List[FaceDetection]) -> bytes:
+    cv2 = _require_cv2()
+    annotated = image_array.copy()
+
+    for d in detections:
+        x1, y1, x2, y2 = [int(v) for v in d.bbox]
+        color = (0, 200, 0) if d.face_is_known else (0, 0, 200)
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-        label = f"{face_label} d={face_dist:.2f} c={face_conf:.2f} det={det_score:.2f}"
+        label = f"{d.face_label} d={d.face_dist:.2f} c={d.face_conf:.2f} det={d.det_score:.2f}"
         cv2.putText(
             annotated,
             label,
@@ -155,7 +161,20 @@ def detect_faces_raw(
     if not ok:
         raise ValueError("Failed to encode annotated image.")
 
-    return detections, encoded.tobytes()
+    return encoded.tobytes()
+
+
+def detect_faces_raw(
+    image_array: Any,
+    thr_strict: float = 0.35,
+    thr_loose: float = 0.50,
+) -> Tuple[List[FaceDetection], bytes]:
+    """
+    Detect faces directly on image array (numpy) to avoid re-decoding.
+    """
+    detections = detect_faces_only(image_array, thr_strict, thr_loose)
+    encoded_bytes = draw_faces(image_array, detections)
+    return detections, encoded_bytes
 
 
 def detect_faces(
