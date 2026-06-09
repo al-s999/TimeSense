@@ -266,7 +266,7 @@ async def _live_preview_generator(
     thr_loose: float,
 ):
     interval = 1.0 / max(fps, 0.001)
-    detect_interval = 10.0  # Inferensi wajah setiap 10 detik agar tidak berat
+    detect_interval = 1.0  # Inferensi wajah setiap 1 detik (batas aman CPU di background)
     last_detect_time = 0.0
     last_detections = []
 
