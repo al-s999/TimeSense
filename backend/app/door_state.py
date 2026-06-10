@@ -147,6 +147,15 @@ class DoorStateMachine:
         self.command_consumed = False
         return {"ok": True, "event": "exit_flow_started"}
 
+    async def schedule_exit_auto_close(self, delay_seconds: float = 5.0) -> None:
+        await asyncio.sleep(delay_seconds)
+        async with self.lock:
+            if self.door_open:
+                self.door_open = False
+                self.last_close_ts = time.time()
+                self.pending_command = "close_door"
+                self.command_consumed = False
+
     def get_sensor_data(self) -> Dict[str, Any]:
         return dict(self.last_sensor)
 

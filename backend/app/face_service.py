@@ -90,11 +90,17 @@ def _post_face(meta: dict) -> None:
         _log_event("face_post_skipped", {"reason": "invalid_label_or_confidence"})
         return
     
-    # Simple payload format: device_id, label, confidence
+    import base64
+    image_base64 = None
+    if "image_bytes" in meta:
+        image_base64 = base64.b64encode(meta["image_bytes"]).decode("utf-8")
+
+    # Simple payload format: device_id, label, confidence, plus image if available
     payload = {
         "device_id": FACE_DEVICE_ID,
         "label": face_label,
         "confidence": conf_val,
+        "image_base64": image_base64,
     }
     
     data = json.dumps(payload).encode("utf-8")

@@ -11,7 +11,12 @@ from typing import Optional, Any, Set
 from fastapi import FastAPI, Depends, HTTPException, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+
+# Setup upload directory
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "history")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 from .db import Base, engine, get_db
 from .models import Event
@@ -86,6 +91,7 @@ def _record_event(
     predicted_label: Optional[str] = None,
     confidence: Optional[float] = None,
     payload: Optional[dict] = None,
+    image_url: Optional[str] = None,
 ) -> Optional[Event]:
     try:
         now = datetime.now(ZoneInfo(TZ_NAME))
@@ -96,6 +102,7 @@ def _record_event(
             confidence=confidence,
             server_received_at=now,
             payload_json=json.dumps(payload, ensure_ascii=False) if payload else None,
+            image_url=image_url,
         )
         db.add(ev)
         db.commit()
@@ -109,6 +116,7 @@ def _record_event(
                 "predicted_label": ev.predicted_label,
                 "confidence": ev.confidence,
                 "server_received_at": ev.server_received_at.isoformat(),
+                "image_url": ev.image_url,
             },
         )
         return ev
@@ -199,6 +207,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
 
 # ===================================================================
@@ -215,41 +224,67 @@ def api_health():
 
 
 # ===================================================================
-#  FACE INGEST (Strict Access Rules)
+#  FACE INGEST — with cooldown
 # ===================================================================
-@app.post("/face")
 @app.post("/api/face/ingest")
-async def face_ingest(
+async def ingest_face(
     payload: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ):
-    # Check API key if configured
-    if API_KEY and (not x_api_key or x_api_key != API_KEY):
-        return {"ok": False, "error": "Unauthorized"}
-
+    check_api_key(x_api_key)
     label = payload.get("label")
-    confidence = payload.get("confidence", 0.0)
-    device_id = resolve_device_id(payload.get("device_id", "face-cam-1"))
+    confidence = payload.get("confidence")
+    raw_device_id = payload.get("device_id")
 
-    if label is None:
-        return {"ok": False, "access": "deny", "identity": None, "error": "label required"}
+    # Validate
+    if label is None or confidence is None:
+        raise HTTPException(status_code=400, detail="label and confidence required")
+
+    try:
+        confidence = float(confidence)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="confidence must be a number")
+
+    if not raw_device_id:
+        raise HTTPException(status_code=400, detail="device_id required")
+
+    device_id = resolve_device_id(raw_device_id)
+    label = str(label).strip()
 
     door = get_door_state()
-    result = await door.process_face(str(label), float(confidence))
-
-    # Record event if it was a valid attempt (not just low confidence noise)
-    if float(confidence) >= 0.5:
-        _record_event(
-            db, background_tasks,
-            device_id=device_id, raw_event="FACE_DETECTED",
-            predicted_label=label, confidence=confidence, payload=payload,
-        )
+    result = await door.process_face(label, confidence)
     
+    if result.get("access") == "cooldown":
+        return result
+
+    image_url = None
+    image_base64 = payload.get("image_base64")
+    if image_base64:
+        import base64
+        import uuid
+        import os
+        try:
+            image_bytes = base64.b64decode(image_base64)
+            filename = f"{uuid.uuid4().hex}.jpg"
+            filepath = os.path.join(UPLOAD_DIR, filename)
+            with open(filepath, "wb") as f:
+                f.write(image_bytes)
+            image_url = f"/static/{filename}"
+        except Exception as e:
+            print(f"[FACE INGEST] Failed to decode/save image: {e}")
+
+    # Record event (outside lock)
+    _record_event(
+        db, background_tasks,
+        device_id=device_id, raw_event="FACE_DETECTED",
+        predicted_label=label, confidence=confidence, payload=payload,
+        image_url=image_url,
+    )
     _log_event("face_ingest", {"device_id": device_id, "label": label, "access": result["access"]})
 
-    return result
+    return {"ok": True, "access": result["access"], "identity": result.get("identity")}
 
 
 # ===================================================================
@@ -258,7 +293,8 @@ async def face_ingest(
 @app.get("/api/access")
 async def get_access(device_id: Optional[str] = None):
     door = get_door_state()
-    return door.get_access_status()
+    result = door.get_access_status()
+    return result
 
 
 # ===================================================================
@@ -267,7 +303,8 @@ async def get_access(device_id: Optional[str] = None):
 @app.get("/api/command")
 async def get_command(device_id: Optional[str] = None):
     door = get_door_state()
-    return await door.consume_command()
+    result = await door.consume_command()
+    return result
 
 
 # ===================================================================
@@ -289,19 +326,18 @@ async def command_execute(payload: dict):
     device_id = resolve_device_id(raw_device_id)
     door = get_door_state()
 
-    async with door.lock:
-        if action == "open_door":
-            result = await door.manual_command("open_door", requester)
-        elif action == "close_door":
-            result = await door.manual_command("close_door", requester)
-        elif action == "disable":
-            door.system_enabled = False
-            result = {"ok": True, "action": "disable"}
-        elif action == "enable":
-            door.system_enabled = True
-            result = {"ok": True, "action": "enable"}
-        else:
-            result = {"ok": False, "error": "unknown action"}
+    if action in {"open_door", "close_door"}:
+        result = await door.manual_command(action=action, identity=requester)
+    else:
+        async with door.lock:
+            if action == "disable":
+                door.system_enabled = False
+                result = {"ok": True, "action": "disable"}
+            elif action == "enable":
+                door.system_enabled = True
+                result = {"ok": True, "action": "enable"}
+            else:
+                result = {"ok": False, "error": "unknown action"}
 
     _log_event("command_execute", {"device_id": device_id, "action": action, "result": result})
     return {**result, "device_id": device_id, "action": action}
@@ -311,16 +347,12 @@ async def command_execute(payload: dict):
 #  SENSOR UPDATE — state machine transitions
 # ===================================================================
 @app.post("/api/sensor/update")
-async def sensor_update(
-    payload: dict,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-):
+async def sensor_update(payload: dict):
     device_id = resolve_device_id(payload.get("device_id", "esp32-1"))
 
-    # Extract distances — accept both "distance1" and "distance1_cm"
-    distance1 = payload.get("distance1") or payload.get("distance1_cm")
-    distance2 = payload.get("distance2") or payload.get("distance2_cm")
+    # Extract distances
+    distance1 = payload.get("distance1")
+    distance2 = payload.get("distance2")
     temperature = payload.get("temperature", 0.0)
 
     # Validate
@@ -349,23 +381,11 @@ async def sensor_update(
 
         if event_type == "entry_detected" and door.door_open:
             entry_result = door.confirm_entry()
-            # Record to DB for Dashboard History
-            _record_event(
-                db, background_tasks,
-                device_id=device_id, raw_event="ENTRY_CONFIRMED",
-                predicted_label=entry_result.get("identity"), confidence=1.0
-            )
             _log_event("entry_confirmed", {"device_id": device_id, "identity": entry_result.get("identity")})
 
         elif event_type == "exit_detected" and not door.door_open:
             exit_result = door.start_exit_flow()
             if exit_result.get("ok"):
-                # Record to DB
-                _record_event(
-                    db, background_tasks,
-                    device_id=device_id, raw_event="EXIT_DETECTED",
-                    predicted_label="someone", confidence=1.0
-                )
                 # Schedule auto-close outside lock
                 asyncio.create_task(door.schedule_exit_auto_close())
                 _log_event("exit_flow_started", {"device_id": device_id})
@@ -440,6 +460,7 @@ def get_notifications(limit: int = 50, db: Session = Depends(get_db)):
             id=r.id, device_id=r.device_id, raw_event=r.raw_event,
             predicted_label=r.predicted_label, confidence=r.confidence,
             server_received_at=r.server_received_at.isoformat(),
+            image_url=r.image_url,
         )
         for r in rows
     ]
@@ -458,9 +479,23 @@ def get_history(limit: int = 200, device_id: Optional[str] = None, type: Optiona
             id=r.id, device_id=r.device_id, raw_event=r.raw_event,
             predicted_label=r.predicted_label, confidence=r.confidence,
             server_received_at=r.server_received_at.isoformat(),
+            image_url=r.image_url,
         )
         for r in rows
     ]
+
+
+@app.get("/api/history/{id}", response_model=EventOut)
+def get_history_by_id(id: int, db: Session = Depends(get_db)):
+    r = db.query(Event).filter(Event.id == id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return EventOut(
+        id=r.id, device_id=r.device_id, raw_event=r.raw_event,
+        predicted_label=r.predicted_label, confidence=r.confidence,
+        server_received_at=r.server_received_at.isoformat(),
+        image_url=r.image_url,
+    )
 
 
 # ===================================================================
@@ -516,9 +551,9 @@ def camera_preview_status(x_api_key: str | None = Header(default=None, alias="X-
 # ===================================================================
 def _fallback_label(raw_event: str) -> str:
     raw = str(raw_event or "").strip().upper()
-    if raw.endswith("_MASUK") or raw.endswith("_KELUAR"):
-        return raw
     labels = {
+        "SAYA_MASUK": "SAYA_MASUK", "TEMAN_MASUK": "TEMAN_MASUK", "ORANG_MASUK": "ORANG_MASUK",
+        "SAYA_KELUAR": "SAYA_KELUAR", "TEMAN_KELUAR": "TEMAN_KELUAR", "ORANG_KELUAR": "ORANG_KELUAR",
         "S1_S2": "ANDA_PERGI", "S2_S1": "ANDA_PULANG",
     }
     return labels.get(raw, "UNKNOWN")
@@ -575,25 +610,24 @@ def build_features(payload: IngestEvent, now: datetime) -> dict:
 
 
 def _is_semantic_access_event(raw_event: str) -> bool:
-    raw = str(raw_event or "").strip().upper()
-    return raw.endswith("_MASUK") or raw.endswith("_KELUAR")
+    return str(raw_event or "").strip().upper() in {
+        "SAYA_MASUK", "TEMAN_MASUK", "ORANG_MASUK",
+        "SAYA_KELUAR", "TEMAN_KELUAR", "ORANG_KELUAR",
+    }
 
 
 def _direction_from_raw_event(raw_event: str) -> str:
-    raw = str(raw_event or "").strip().upper()
-    if raw.endswith("_MASUK"):
-        return "IN"
-    if raw.endswith("_KELUAR"):
-        return "OUT"
     mapping = {
         "S1_S2": "OUT", "S2_S1": "IN",
+        "SAYA_MASUK": "IN", "TEMAN_MASUK": "IN", "ORANG_MASUK": "IN",
+        "SAYA_KELUAR": "OUT", "TEMAN_KELUAR": "OUT", "ORANG_KELUAR": "OUT",
     }
-    return mapping.get(raw, "UNK")
+    return mapping.get(str(raw_event or "").strip().upper(), "UNK")
 
 
 def _raw_event_person_id(raw_event: str) -> Optional[int]:
     raw = str(raw_event or "").strip().upper()
-    if raw.startswith("ME_") or raw.startswith("SAYA_"):
+    if raw.startswith("SAYA_"):
         return 1
     if raw.startswith("TEMAN_"):
         return 2
@@ -683,6 +717,17 @@ async def ingest_event(
         predicted_label = _fallback_label(payload.raw_event)
         confidence = 0.0
 
+    image_url = None
+    if face_result and "image_bytes" in face_result:
+        import uuid
+        filename = f"{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(face_result["image_bytes"])
+        image_url = f"/static/history/{filename}"
+        # Hapus bytes dari face_result agar tidak ter-serialize ke JSON
+        del face_result["image_bytes"]
+
     if face_result:
         meta = dict(payload_dict.get("meta") or {})
         meta["face_recognition"] = face_result
@@ -695,6 +740,7 @@ async def ingest_event(
         predicted_label=predicted_label, confidence=confidence,
         server_received_at=now,
         payload_json=json.dumps(payload_dict, ensure_ascii=False),
+        image_url=image_url,
     )
     db.add(ev)
     db.commit()
@@ -705,6 +751,7 @@ async def ingest_event(
             "id": ev.id, "device_id": ev.device_id, "raw_event": ev.raw_event,
             "predicted_label": ev.predicted_label, "confidence": ev.confidence,
             "server_received_at": ev.server_received_at.isoformat(),
+            "image_url": ev.image_url,
         })
     except Exception:
         pass
@@ -713,6 +760,7 @@ async def ingest_event(
         id=ev.id, device_id=ev.device_id, raw_event=ev.raw_event,
         predicted_label=ev.predicted_label, confidence=ev.confidence,
         server_received_at=ev.server_received_at.isoformat(),
+        image_url=ev.image_url,
     )
 
 

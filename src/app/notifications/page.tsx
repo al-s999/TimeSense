@@ -1,6 +1,8 @@
 import { getNotifications, type BackendEvent } from "@/lib/backend";
 import NotificationsClient from "./NotificationsClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function NotificationsPage() {
   let initialEvents: BackendEvent[] = [];
   let errorMessage: string | null = null;

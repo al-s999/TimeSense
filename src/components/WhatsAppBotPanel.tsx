@@ -80,7 +80,23 @@ export default function WhatsAppBotPanel() {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isBotOffline, setIsBotOffline] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const handleError = (err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.toLowerCase().includes("failed to fetch") ||
+      msg.toLowerCase().includes("network error") ||
+      msg.toLowerCase().includes("fetch")
+    ) {
+      setIsBotOffline(true);
+      setError(null);
+    } else {
+      setIsBotOffline(false);
+      setError(msg);
+    }
+  };
 
   const botNumber = useMemo(() => {
     if (config.botNumber) return config.botNumber;
@@ -96,6 +112,7 @@ export default function WhatsAppBotPanel() {
       void refreshHealth();
     }, 5000);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshAll = async () => {
@@ -107,8 +124,9 @@ export default function WhatsAppBotPanel() {
       ]);
       setConfig((prev) => ({ ...prev, ...cfg.config }));
       setHealth(status);
+      setIsBotOffline(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleError(err);
     }
   };
 
@@ -140,8 +158,9 @@ export default function WhatsAppBotPanel() {
       });
       setConfig((prev) => ({ ...prev, ...res.config }));
       setNotice("Konfigurasi tersimpan.");
+      setIsBotOffline(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleError(err);
     } finally {
       setBusy(false);
     }
@@ -163,8 +182,9 @@ export default function WhatsAppBotPanel() {
       } else {
         await pollPairing();
       }
+      setIsBotOffline(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleError(err);
     } finally {
       setBusy(false);
     }
@@ -186,9 +206,10 @@ export default function WhatsAppBotPanel() {
       } else {
         setNotice("Sinkron terkirim.");
       }
+      setIsBotOffline(false);
       await refreshAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleError(err);
     } finally {
       setBusy(false);
     }
@@ -203,9 +224,10 @@ export default function WhatsAppBotPanel() {
     try {
       await fetchJson("/logout", { method: "POST" });
       setNotice("Berhasil logout. Silakan generate QR untuk login ulang.");
+      setIsBotOffline(false);
       await refreshAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      handleError(err);
     } finally {
       setBusy(false);
     }
@@ -428,13 +450,32 @@ export default function WhatsAppBotPanel() {
             </button>
           </div>
 
+          {isBotOffline ? (
+            <div className="mt-2 rounded-2xl bg-amber-50 border border-amber-200 px-5 py-5 text-sm text-amber-800 shadow-sm animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <h4 className="font-bold text-base">Menunggu Layanan WhatsApp Bot</h4>
+              </div>
+              <p className="mb-3 text-amber-700">Aplikasi mendeteksi bahwa mesin bot WhatsApp sedang mati (&quot;Failed to fetch&quot;).</p>
+              
+              <div className="font-bold text-xs uppercase tracking-wider text-amber-700/80 mb-2">Panduan Perbaikan Darurat:</div>
+              <ol className="list-decimal pl-5 space-y-1.5 text-amber-700/90 font-medium">
+                <li>Buka terminal/CMD baru di komputer server.</li>
+                <li>Masuk ke direktori: <code className="bg-amber-100/80 border border-amber-200 px-1.5 py-0.5 rounded text-amber-900">cd &quot;Time Sense/time-sense-web&quot;</code></li>
+                <li>Jalankan perintah: <code className="bg-amber-100/80 border border-amber-200 px-1.5 py-0.5 rounded text-amber-900">npm run bot</code></li>
+                <li>Biarkan terminal terbuka dan berjalan.</li>
+                <li>Klik tombol <b>Refresh</b> di sudut kanan atas menu ini.</li>
+              </ol>
+            </div>
+          ) : null}
+
           {notice ? (
-            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-700 shadow-sm">
               {notice}
             </div>
           ) : null}
           {error ? (
-            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <div className="rounded-2xl bg-rose-50 border border-rose-100 px-4 py-3 text-sm text-rose-700 shadow-sm">
               {error}
             </div>
           ) : null}

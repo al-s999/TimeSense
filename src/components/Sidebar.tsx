@@ -7,6 +7,7 @@ import { useProfile } from "@/lib/profile";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: "/dashboardicon.svg" },
   { href: "/history", label: "Riwayat", icon: "/historyIcon.svg" },
+  { href: "/gallery", label: "Galeri Wajah", icon: "/globe.svg" },
   { href: "/notifications", label: "Notifikasi", icon: "/notifIcon.svg" },
   { href: "/enroll-face", label: "Enroll Face", icon: "/file.svg" },
   { href: "/live-face", label: "Live Face", icon: "/window.svg" },

@@ -321,6 +321,12 @@ async function startSocket() {
         text,
       });
 
+      // Hanya proses command/balas jika pengirimnya adalah nomor owner
+      const isOwner = remoteJid.startsWith(cfg.ownerNumber);
+      if (!isOwner) {
+        continue;
+      }
+
       const reply = await buildReply(text);
 
       try {

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { getHistory, type BackendEvent } from "@/lib/backend";
 
 function formatDayDate(iso: string) {
@@ -37,11 +36,12 @@ function infoFromLabel(label: string | null, raw: string) {
   return { text: "—", kind: "UNKNOWN" as const };
 }
 
-export default async function HistoryPage({
-  searchParams,
-}: {
-  searchParams?: { page?: string };
+export const dynamic = "force-dynamic";
+
+export default async function HistoryPage(props: {
+  searchParams?: Promise<{ page?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   let allRows: BackendEvent[] = [];
   let errorMessage: string | null = null;
 
@@ -67,7 +67,7 @@ export default async function HistoryPage({
       <section className="bg-white/70 rounded-[26px] shadow-sm overflow-hidden">
         {/* header row */}
         <div className="bg-neutral-200/60 px-6 py-4">
-          <div className="grid grid-cols-[120px_1.6fr_140px_180px_80px] text-xs font-semibold text-neutral-700 tracking-wide">
+          <div className="grid grid-cols-[120px_1.6fr_140px_180px_100px] text-xs font-semibold text-neutral-700 tracking-wide">
             <div>ID</div>
             <div>DAY/DATE</div>
             <div className="text-center">TIME</div>
@@ -98,7 +98,7 @@ export default async function HistoryPage({
               return (
                 <div
                   key={e.id}
-                  className="grid grid-cols-[120px_1.6fr_140px_180px_80px] items-center px-6 py-4 text-sm hover:bg-white/50 transition-colors"
+                  className="grid grid-cols-[120px_1.6fr_140px_180px_100px] items-center px-6 py-4 text-sm hover:bg-white/50 transition-colors"
                 >
                   <div className="text-neutral-500 font-medium">#{e.id}</div>
 
@@ -115,15 +115,10 @@ export default async function HistoryPage({
                     </span>
                   </div>
 
-                  <div className="flex justify-center">
-                    {/* sementara UI only (nanti kalau endpoint delete sudah ada baru dihubungkan) */}
-                    <button
-                      className="p-2 rounded-full hover:bg-neutral-200/60 transition-colors"
-                      title="Delete"
-                      aria-label={`Delete event ${e.id}`}
-                    >
-                      <Image src="/trash.svg" alt="" width={18} height={18} aria-hidden />
-                    </button>
+                  <div className="flex justify-center items-center gap-2">
+                    <a href={`/history/${e.id}`} className="px-3 py-1.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold transition-colors">
+                      Detail
+                    </a>
                   </div>
                 </div>
               );
